@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <corners android:radius="8dp" />  <!-- 保持与正常状态相同的圆角 -->
+    <solid android:color="#33000000" />  <!-- 半透明黑色作为按下效果 -->
+</shape>
