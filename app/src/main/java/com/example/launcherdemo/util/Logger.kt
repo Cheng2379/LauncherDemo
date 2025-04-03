@@ -8,7 +8,7 @@ import android.util.Log
  * @since 2025/1/9
  */
 object Logger {
-    private const val TAG = "Launcher"
+    private const val TAG = "LauncherDemo"
     const val MIN_STACK_OFFSET = 2
     const val VERBOSE = 2
     const val DEBUG = 3

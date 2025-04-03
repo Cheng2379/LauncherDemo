@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:id="@+id/action_info"
+        android:icon="@drawable/img_app_info"
+        android:title="应用信息" />
+    
+    <item
+        android:id="@+id/action_uninstall"
+        android:icon="@drawable/img_app_uninstall"
+        android:title="卸载" />
+</menu>

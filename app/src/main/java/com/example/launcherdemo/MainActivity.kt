@@ -1,13 +1,21 @@
 package com.example.launcherdemo
 
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
+import android.view.View
 import android.widget.ImageView
+import android.widget.PopupMenu
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.ActivityResultLauncher
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
@@ -16,15 +24,22 @@ import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.RecyclerView
 import com.example.launcherdemo.adapter.RecyclerViewAdapter
 import com.example.launcherdemo.bean.AppInfo
-import com.example.launcherdemo.util.Logger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import androidx.core.net.toUri
+import com.example.launcherdemo.util.Logger
+import kotlinx.coroutines.delay
 
 class MainActivity : AppCompatActivity() {
     private val mRv: RecyclerView by lazy { findViewById(R.id.rv_main) }
     private var mRvAdapter: RecyclerViewAdapter<AppInfo>? = null
     private var appInfoList = ArrayList<AppInfo>()
+
+    private var pendingUninstallPackage: String? = null
+    private var pendingUninstallAppName: String? = null
+    private var uninstallResultReceiver: BroadcastReceiver? = null
+    private lateinit var uninstallLauncher: ActivityResultLauncher<Intent>
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -38,6 +53,7 @@ class MainActivity : AppCompatActivity() {
 
         initView()
         loadApplicationInfoList()
+        setUninstallResultReceiver()
     }
 
     private fun initView() {
@@ -63,11 +79,66 @@ class MainActivity : AppCompatActivity() {
             view.setOnClickListener {
                 launchApp(this, appInfo.packageName)
             }
+            view.setOnLongClickListener {
+                showAppOptions(view, appInfo)
+                true
+            }
         }
         mRv.adapter = mRvAdapter
+
+        // 卸载回调监听
+        uninstallLauncher =
+            registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+                pendingUninstallPackage?.let { target ->
+                    lifecycleScope.launch {
+                        delay(100)
+                        if (isAppInstalled(target)) {
+                            Toast.makeText(this@MainActivity, "已取消卸载", Toast.LENGTH_SHORT)
+                                .show()
+                        }
+                        pendingUninstallPackage = null
+                        pendingUninstallAppName = null
+                    }
+                }
+            }
     }
 
-    private suspend fun getResolveInfoList(): List<AppInfo> = withContext(Dispatchers.IO) {
+    private fun showAppOptions(view: View, appInfo: AppInfo) {
+        PopupMenu(this, view).apply {
+            menuInflater.inflate(R.menu.menu_app_options, menu)
+            setOnMenuItemClickListener { item ->
+                when (item.itemId) {
+                    R.id.action_info -> {
+                        val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                            data = "package:${appInfo.packageName}".toUri()
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                        this@MainActivity.startActivity(intent)
+                        true
+                    }
+
+                    R.id.action_uninstall -> {
+                        // 常规卸载方法
+                        pendingUninstallPackage = appInfo.packageName
+                        pendingUninstallAppName = appInfo.appName
+                        val intent =
+                            Intent(Intent.ACTION_DELETE, "package:${appInfo.packageName}".toUri())
+                        uninstallLauncher.launch(intent)
+
+                        true
+                    }
+
+                    else -> false
+                }
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                setForceShowIcon(true)
+            }
+            show()
+        }
+    }
+
+    private suspend fun getAppInfoList(): List<AppInfo> = withContext(Dispatchers.IO) {
         val mainIntent = Intent(Intent.ACTION_MAIN).apply {
             addCategory(Intent.CATEGORY_LAUNCHER)
         }
@@ -94,7 +165,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun loadApplicationInfoList() {
         lifecycleScope.launch(Dispatchers.IO) {
-            appInfoList = getResolveInfoList() as ArrayList<AppInfo>
+            appInfoList = getAppInfoList() as ArrayList<AppInfo>
             appInfoList.sortWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.appName })
             withContext(Dispatchers.Main) {
                 mRvAdapter?.updateAll(appInfoList)
@@ -117,9 +188,10 @@ class MainActivity : AppCompatActivity() {
         intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         this.startActivity(intent)*/
         // 跳转方式二, 稳定写法
-        val intent = context.packageManager.getLaunchIntentForPackage(packageName)
+        val intent = context.packageManager.getLaunchIntentForPackage(packageName)?.apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
         intent?.let {
-            it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             try {
                 context.startActivity(intent)
             } catch (e: Exception) {
@@ -130,5 +202,55 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun isAppInstalled(packageName: String): Boolean {
+        return try {
+            packageManager.getPackageInfo(packageName, 0)
+            true
+        } catch (e: PackageManager.NameNotFoundException) {
+            false
+        }
+    }
+
+    /**
+     * 监听卸载回调广播
+     */
+    private fun setUninstallResultReceiver() {
+        uninstallResultReceiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context, intent: Intent) {
+                if (intent.action == Intent.ACTION_PACKAGE_REMOVED) {
+                    intent.data?.schemeSpecificPart?.let { removedPackageName ->
+                        val appName = pendingUninstallAppName ?: pendingUninstallPackage
+                        Logger.d("removedPackage: $removedPackageName")
+                        Logger.d("appName: $appName")
+                        val isUninstalled = intent.getBooleanExtra(Intent.EXTRA_REPLACING, false)
+                        if (!isUninstalled) {
+                            runOnUiThread {
+                                if (!isFinishing && !isDestroyed) {
+                                    Toast.makeText(
+                                        context,
+                                        "${appName}卸载完成",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                }
+                            }
+                            // 刷新应用列表
+                            loadApplicationInfoList()
+                            pendingUninstallPackage = null
+                            pendingUninstallAppName = null
+                        }
+                    }
+                }
+            }
+        }
+        val filter = IntentFilter(Intent.ACTION_PACKAGE_REMOVED)
+        filter.addDataScheme("package")
+        registerReceiver(uninstallResultReceiver, filter)
+    }
+
+
+    override fun onDestroy() {
+        unregisterReceiver(uninstallResultReceiver)
+        super.onDestroy()
+    }
 
 }
