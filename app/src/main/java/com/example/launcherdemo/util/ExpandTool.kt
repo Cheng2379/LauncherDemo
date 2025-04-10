@@ -87,7 +87,7 @@ fun EditText.textChangedListener(
 /**
  * 获取媒体应用信息
  */
-fun MediaController.getActiveMediaAppBean(): MediaAppBean? {
+fun MediaController.getMediaAppBean(): MediaAppBean? {
     return this.packageName?.let { packageName ->
         Logger.d("packageName: $packageName")
         // 获取媒体应用信息
@@ -97,7 +97,7 @@ fun MediaController.getActiveMediaAppBean(): MediaAppBean? {
         val appIcon = packageManager.getApplicationIcon(applicationInfo).toBitmap()
 
         MediaAppBean(appName, packageName, appIcon,
-            this.metadata?.getActiveMediaInfoBean(this),
+            this.getMediaInfoBean(),
             this)
     } ?: run { null }
 }
@@ -105,14 +105,15 @@ fun MediaController.getActiveMediaAppBean(): MediaAppBean? {
 /**
  * 获取媒体信息
  */
-fun MediaMetadata.getActiveMediaInfoBean(controller: MediaController): MediaInfoBean {
-    val title = this.getString(MediaMetadata.METADATA_KEY_TITLE) ?: "未知歌曲"
-    val artist = this.getString(MediaMetadata.METADATA_KEY_ARTIST) ?: "未知歌手"
-    val state = controller.getState()
-    val albumBitmap = this.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART)
-        ?: this.getBitmap(MediaMetadata.METADATA_KEY_ART)
-    val currentPosition = controller.getPosition()
-    val duration = this.getLong(MediaMetadata.METADATA_KEY_DURATION)
+fun MediaController.getMediaInfoBean(): MediaInfoBean {
+    val metadata = this.metadata
+    val title = metadata?.getString(MediaMetadata.METADATA_KEY_TITLE) ?: "未知歌曲"
+    val artist = metadata?.getString(MediaMetadata.METADATA_KEY_ARTIST) ?: "未知歌手"
+    val state = this.getState()
+    val albumBitmap = metadata?.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART)
+        ?: metadata?.getBitmap(MediaMetadata.METADATA_KEY_ART)
+    val currentPosition = this.getPosition()
+    val duration = metadata?.getLong(MediaMetadata.METADATA_KEY_DURATION) ?: 0
     // 防止除0异常
     val process = if (duration > 0)
         (currentPosition.toFloat() / duration.toFloat())

@@ -14,11 +14,13 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
+import android.widget.PopupMenu
 import android.widget.SeekBar
 import android.widget.TextView
+import androidx.core.content.ContextCompat
 import androidx.core.graphics.drawable.toBitmap
 import com.example.launcherdemo.util.findImageViewById
-import com.example.launcherdemo.util.getActiveMediaAppBean
+import com.example.launcherdemo.util.getMediaAppBean
 import com.example.launcherdemo.R
 import com.example.launcherdemo.bean.MediaAppBean
 import com.example.launcherdemo.bean.MediaInfoBean
@@ -52,12 +54,18 @@ class MusicCardView @JvmOverloads constructor(
     private val mPauseView: ImageView by lazy { view.findViewById(R.id.music_pause) }
     private val mNextView: ImageView by lazy { view.findViewById(R.id.music_next) }
 
-    //// MediaBrowserCompat用于连接到媒体播放应用(酷狗、网易云)
-    //private var mediaBrowser: MediaBrowserCompat? = null
+    private var mediaSessionManager: MediaSessionManager? = null
+    private var sessionListener: MediaSessionManager.OnActiveSessionsChangedListener? = null
+
     // MediaController用于控制对应的媒体应用操作
     private var currentController: MediaController? = null
+
     private var currentMediaAppBean: MediaAppBean? = null
     private var currentMediaInfoBean: MediaInfoBean? = null
+
+    //  保存当前活跃的音乐app列表
+    private val allActiveMusicList = mutableListOf<MediaAppBean>()
+
     private val handler = Handler(Looper.getMainLooper())
     private val progressRunnable = object : Runnable {
         override fun run() {
@@ -83,26 +91,9 @@ class MusicCardView @JvmOverloads constructor(
         initView()
     }
 
-
-
-    /**
-     *
-     */
     @SuppressLint("UseCompatLoadingForDrawables", "SetTextI18n")
     fun initView() {
-        getActiveAllMediaInfo()?.let { musicList ->
-            // 设置当前播放控制器
-            currentController = musicList[0].mediaController
-            // 设置当前音频数据
-            currentMediaAppBean = musicList[0]
-
-            registerPlaybackCallback()
-            currentController?.let {
-                updateCurrentMusicInfo()
-                updatePlayOrPauseButton(it.getState())
-            }
-        }
-
+        registerSessionChangedListener()
         // 初始化进度条监听器
         mProgressBarView.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
@@ -122,7 +113,6 @@ class MusicCardView @JvmOverloads constructor(
         mPrevious.setOnClickListener {
             playPrevious()
         }
-
         // 播放
         mPlayView.setOnClickListener {
             playMusic()
@@ -135,9 +125,19 @@ class MusicCardView @JvmOverloads constructor(
         mNextView.setOnClickListener {
             playNext()
         }
+
+        // 切换音源
+        //mSwitchMusicView.setOnClickListener {
+        //    val view = LayoutInflater.from(context).inflate(R.layout.item_media_app, this, false)
+        //    val popupMenu = PopupMenu(context, view)
+        //}
     }
 
+    /**
+     * 注册播放器监听回调
+     */
     private fun registerPlaybackCallback() {
+        playbackCallback?.let { currentController?.unregisterCallback(it) }
         playbackCallback = object : MediaController.Callback() {
             // 播放状态更改
             override fun onPlaybackStateChanged(playbackState: PlaybackState?) {
@@ -171,62 +171,111 @@ class MusicCardView @JvmOverloads constructor(
     }
 
     /**
-     * 获取系统活跃媒体信息
+     * 注册会话改变监听器
      */
-    private fun getActiveAllMediaInfo(): List<MediaAppBean>? {
-        val allActiveMusicList = mutableListOf<MediaAppBean>()
+    private fun registerSessionChangedListener() {
         // 非系统级App必须申请通知栏监听服务, 否则无法获取到MediaSession信息
         val componentName = ComponentName(context, LauncherNotificationListenerService::class.java)
-        val mediaSessionManager =
+        mediaSessionManager =
             context.getSystemService(Context.MEDIA_SESSION_SERVICE) as MediaSessionManager
-        val activeSessions = mediaSessionManager.getActiveSessions(componentName)
 
-        if (activeSessions.isNotEmpty()) {
-            activeSessions.forEach { controller ->
-                controller?.packageName?.let {
-                    controller.getActiveMediaAppBean()?.let {
-                        currentMediaAppBean = it
+        sessionListener = MediaSessionManager.OnActiveSessionsChangedListener { controllerList ->
+            Logger.d("Listener controller: $controllerList")
+            handleActiveSessionsChanged(controllerList)
+        }
+        mediaSessionManager?.addOnActiveSessionsChangedListener(
+            sessionListener!!,
+            componentName,
+            handler
+        )
+
+        // 设置完监听器后，再获取当前活动应用，用以初始化显示UI
+        try {
+            val activeSession = mediaSessionManager?.getActiveSessions(componentName)
+            handleActiveSessionsChanged(activeSession)
+        } catch (e: Exception) {
+            Logger.e("SecurityException: Need Notification Access permission. ${e.message}")
+            resetUI()
+        }
+
+        Logger.i("allActiveMusicList: $allActiveMusicList")
+    }
+
+    /**
+     * 重置UI
+     */
+    private fun resetUI() {
+        currentController = null
+        currentMediaAppBean = null
+        currentMediaInfoBean = null
+        mMusicLogo.setImageDrawable(ContextCompat.getDrawable(context, R.drawable.img_music))
+        mResourceView.text = "暂无音源"
+        mAlbumView.setImageDrawable(ContextCompat.getDrawable(context, R.drawable.img_album))
+        mNameAndSingerView.text = "无播放"
+        mProgressBarView.progress = 0
+        mPlayView.visibility = View.VISIBLE
+        mPauseView.visibility = View.GONE
+    }
+
+    /**
+     * 处理实时媒体会话
+     */
+    fun handleActiveSessionsChanged(controllerList: List<MediaController>?) {
+        allActiveMusicList.clear()
+        if (!controllerList.isNullOrEmpty()) {
+            var playingController: MediaController? = null
+
+            controllerList.forEach { controller ->
+                controller.packageName?.let {
+                    controller.getMediaAppBean()?.let {
                         allActiveMusicList.add(it)
+
+                        // 获取正在活跃的媒体应用Controller
+                        if (playingController == null && controller.getState() == PlaybackState.STATE_PLAYING) {
+                            playingController = controller
+                        }
                     }
                 } ?: run {
-                    Logger.e("not find app, packageName: ${controller?.packageName}")
+                    Logger.e("not find app, packageName: ${controller.packageName}")
                 }
             }
-            return allActiveMusicList
+            currentController = playingController ?: controllerList.firstOrNull()
+            currentController?.let {
+                registerPlaybackCallback()
+                updateCurrentMusicInfo()
+                updatePlayOrPauseButton(it.getState())
+            } ?: resetUI()
         } else {
             Logger.d("没有活动的媒体应用")
+            allActiveMusicList.clear()
+            resetUI()
         }
-        return null
     }
+
 
     fun playMusic() {
         currentController?.let { controller ->
             controller.transportControls.play()
-            Logger.d("点击播放, 当前状态: ${controller.getState()}")
         }
     }
 
     fun pauseMusic() {
         currentController?.let { controller ->
             controller.transportControls.pause()
-            Logger.d("点击暂停, 当前状态: ${controller.getState()}")
         }
     }
 
     fun playPrevious() {
         currentController?.let { controller ->
             controller.transportControls.skipToPrevious()
-            Logger.d("点击上一首, 当前状态: ${controller.getState()}")
         }
     }
 
     fun playNext() {
         currentController?.let { controller ->
             controller.transportControls.skipToNext()
-            Logger.d("点击下一首, 当前状态: ${controller.getState()}")
         }
     }
-
 
     /**
      * 更新播放或暂停按钮状态
@@ -258,9 +307,9 @@ class MusicCardView @JvmOverloads constructor(
      */
     @SuppressLint("UseCompatLoadingForDrawables", "SetTextI18n")
     private fun updateCurrentMusicInfo() {
-        currentController?.let {
+        currentController?.let { controller ->
             // 获取并设置最新的数据
-            currentMediaAppBean = it.getActiveMediaAppBean()
+            currentMediaAppBean = controller.getMediaAppBean()
 
             currentMediaInfoBean = currentMediaAppBean?.mediaInfoBean
             Logger.d("currentMediaInfoBean: $currentMediaInfoBean")
@@ -270,20 +319,22 @@ class MusicCardView @JvmOverloads constructor(
             )
             mResourceView.text = currentMediaAppBean?.appName ?: "媒体中心"
 
-            mAlbumView.setImageBitmap(
-                currentMediaInfoBean!!.albumBitmap ?: resources.getDrawable(
-                    R.drawable.img_album,
-                    null
+            currentMediaInfoBean?.let {
+                mAlbumView.setImageBitmap(
+                    it.albumBitmap ?: resources.getDrawable(
+                        R.drawable.img_album,
+                        null
+                    )
+                        .toBitmap()
                 )
-                    .toBitmap()
-            )
-            mNameAndSingerView.text =
-                currentMediaInfoBean!!.title + "-" + currentMediaInfoBean!!.artist
+                mNameAndSingerView.text =
+                    it.title + "-" + it.artist
 
-            // 此处先设置最大值，再设置当前值，防止进度被重置
-            mProgressBarView.max = currentMediaInfoBean!!.duration.toInt()
-            mProgressBarView.progress =
-                (currentMediaInfoBean!!.progressBar * mProgressBarView.max).toInt()
+                // 此处先设置最大值，再设置当前值，防止进度被重置
+                mProgressBarView.max = it.duration.toInt()
+                mProgressBarView.progress =
+                    (it.progressBar * mProgressBarView.max).toInt()
+            }
         }
     }
 
@@ -309,8 +360,10 @@ class MusicCardView @JvmOverloads constructor(
 
     override fun onDetachedFromWindow() {
         super.onDetachedFromWindow()
+
         stopProgressUpdate()
         playbackCallback?.let { currentController?.unregisterCallback(it) }
+        sessionListener?.let { mediaSessionManager?.removeOnActiveSessionsChangedListener(it) }
     }
 
 
