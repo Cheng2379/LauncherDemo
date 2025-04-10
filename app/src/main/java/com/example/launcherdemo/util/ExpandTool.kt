@@ -1,4 +1,4 @@
-package com.cheng.youthapartment.util
+package com.example.launcherdemo.util
 
 import android.content.Intent
 import android.media.MediaMetadata
@@ -21,13 +21,12 @@ import androidx.recyclerview.widget.RecyclerView
 import com.example.launcherdemo.App
 import com.example.launcherdemo.bean.MediaAppBean
 import com.example.launcherdemo.bean.MediaInfoBean
-import com.example.launcherdemo.util.Logger
 
 /**
  * 拓展函数工具类
  *
  * @author Cheng
- * @since 2025/1/4
+ * @since 2025/4/09
  */
 
 fun String.showToast(duration: Int = Toast.LENGTH_SHORT) {
@@ -97,22 +96,23 @@ fun MediaController.getActiveMediaAppBean(): MediaAppBean? {
         val appName = packageManager.getApplicationLabel(applicationInfo).toString()
         val appIcon = packageManager.getApplicationIcon(applicationInfo).toBitmap()
 
-        MediaAppBean(appName, packageName, appIcon, this.getActiveMediaInfoBean(), this)
+        MediaAppBean(appName, packageName, appIcon,
+            this.metadata?.getActiveMediaInfoBean(this),
+            this)
     } ?: run { null }
 }
 
 /**
  * 获取媒体信息
  */
-fun MediaController.getActiveMediaInfoBean(): MediaInfoBean {
-    val metadata = this.metadata
-    val title = metadata?.getString(MediaMetadata.METADATA_KEY_TITLE) ?: "未知歌曲"
-    val artist = metadata?.getString(MediaMetadata.METADATA_KEY_ARTIST) ?: "未知歌手"
-    val state = this.playbackState?.state ?: PlaybackState.STATE_NONE
-    val albumBitmap = metadata?.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART)
-        ?: metadata?.getBitmap(MediaMetadata.METADATA_KEY_ART)
-    val currentPosition = this.playbackState?.position ?: 0
-    val duration = this.metadata?.getLong(MediaMetadata.METADATA_KEY_DURATION) ?: 0
+fun MediaMetadata.getActiveMediaInfoBean(controller: MediaController): MediaInfoBean {
+    val title = this.getString(MediaMetadata.METADATA_KEY_TITLE) ?: "未知歌曲"
+    val artist = this.getString(MediaMetadata.METADATA_KEY_ARTIST) ?: "未知歌手"
+    val state = controller.getState()
+    val albumBitmap = this.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART)
+        ?: this.getBitmap(MediaMetadata.METADATA_KEY_ART)
+    val currentPosition = controller.getPosition()
+    val duration = this.getLong(MediaMetadata.METADATA_KEY_DURATION)
     // 防止除0异常
     val process = if (duration > 0)
         (currentPosition.toFloat() / duration.toFloat())
@@ -127,6 +127,20 @@ fun MediaController.getActiveMediaInfoBean(): MediaInfoBean {
         duration,
         null
     )
+}
+
+/**
+ * 获取媒体信息
+ */
+fun MediaController.getState(): Int {
+    return this.playbackState?.state ?: PlaybackState.STATE_NONE
+}
+
+/**
+ * 获取媒体进度
+ */
+fun MediaController.getPosition(): Long {
+    return this.playbackState?.position ?: 0
 }
 
 fun View.findTextViewById(id: Int): TextView = findViewById(id)

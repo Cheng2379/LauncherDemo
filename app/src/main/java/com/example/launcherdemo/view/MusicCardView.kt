@@ -17,13 +17,14 @@ import android.widget.ImageView
 import android.widget.SeekBar
 import android.widget.TextView
 import androidx.core.graphics.drawable.toBitmap
-import com.cheng.youthapartment.util.findImageViewById
-import com.cheng.youthapartment.util.getActiveMediaAppBean
+import com.example.launcherdemo.util.findImageViewById
+import com.example.launcherdemo.util.getActiveMediaAppBean
 import com.example.launcherdemo.R
 import com.example.launcherdemo.bean.MediaAppBean
 import com.example.launcherdemo.bean.MediaInfoBean
 import com.example.launcherdemo.service.LauncherNotificationListenerService
 import com.example.launcherdemo.util.Logger
+import com.example.launcherdemo.util.getState
 
 
 /**
@@ -40,7 +41,7 @@ class MusicCardView @JvmOverloads constructor(
     private val view: View by lazy {
         LayoutInflater.from(context).inflate(R.layout.view_card_music, this, false)
     }
-    private val mMusicLogin by lazy { view.findImageViewById(R.id.music_logo) }
+    private val mMusicLogo by lazy { view.findImageViewById(R.id.music_logo) }
     private val mResourceView: TextView by lazy { view.findViewById(R.id.music_resource) }
     private val mSwitchMusicView: ImageView by lazy { view.findViewById(R.id.music_switch_resource) }
     private val mAlbumView: ImageView by lazy { view.findViewById(R.id.music_album) }
@@ -62,15 +63,15 @@ class MusicCardView @JvmOverloads constructor(
         override fun run() {
             currentController?.let { controller ->
                 val progress = controller.playbackState?.position ?: 0L
-                val duration = currentMediaInfoBean!!.duration
-                currentMediaInfoBean!!.progressBar = if (duration > 0)
-                    (progress.toFloat() / duration.toFloat())
-                else 0.0f
-                // 此处先设置最大值，再设置当前值，防止进度被重置
-                mProgressBarView.max = currentMediaInfoBean!!.duration.toInt()
-                mProgressBarView.progress =
-                    (currentMediaInfoBean!!.progressBar * mProgressBarView.max).toInt()
-                handler.postDelayed(this, 1000)
+                currentMediaInfoBean?.let { mediaInfoBean ->
+                    val duration = mediaInfoBean.duration
+                    mediaInfoBean.progressBar = if (duration > 0)
+                        (progress.toFloat() / duration.toFloat())
+                    else 0.0f
+                    mProgressBarView.progress =
+                        (mediaInfoBean.progressBar * mProgressBarView.max).toInt()
+                    handler.postDelayed(this, 1000)
+                }
             }
         }
     }
@@ -80,60 +81,9 @@ class MusicCardView @JvmOverloads constructor(
     init {
         addView(view)
         initView()
-        initProgressBarListener()
     }
 
-    // TODO 使用callback实时更新数据
-    private fun registerPlaybackCallback() {
-        playbackCallback = object : MediaController.Callback() {
-            // 播放状态更改
-            override fun onPlaybackStateChanged(playbackState: PlaybackState?) {
-                super.onPlaybackStateChanged(playbackState)
-                playbackState?.let {
-                    updatePlayOrPauseButton(it.state)
-                    updateProgressBar(it.position)
-                }
-            }
 
-            // 音乐信息更改
-            override fun onMetadataChanged(metadata: MediaMetadata?) {
-                currentMediaInfoBean?.let { musicInfoBean ->
-
-                }
-            }
-        }
-        currentController?.registerCallback(playbackCallback as MediaController.Callback)
-    }
-
-    /**
-     * 初始化进度条监听器
-     */
-    private fun initProgressBarListener() {
-        mProgressBarView.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
-                if (fromUser) {
-                    updateProgressBar(progress.toLong())
-                }
-            }
-
-            override fun onStartTrackingTouch(seekBar: SeekBar?) {}
-
-            override fun onStopTrackingTouch(seekBar: SeekBar?) {}
-        })
-    }
-
-    /**
-     * 更新进度条
-     */
-    private fun updateProgressBar(progress: Long) {
-        if (currentController != null && currentMediaInfoBean != null) {
-            currentController!!.transportControls.seekTo(progress)
-            val duration = currentMediaInfoBean!!.duration
-            currentMediaInfoBean!!.progressBar = if (duration > 0)
-                (progress.toFloat() / duration.toFloat())
-            else 0.0f
-        }
-    }
 
     /**
      *
@@ -146,13 +96,26 @@ class MusicCardView @JvmOverloads constructor(
             // 设置当前音频数据
             currentMediaAppBean = musicList[0]
 
-            updateCurrentMusicInfo()
-
-            // 此处先设置最大值，再设置当前值，防止进度被重置
-            mProgressBarView.max = currentMediaInfoBean!!.duration.toInt()
-            mProgressBarView.progress =
-                (currentMediaInfoBean!!.progressBar * mProgressBarView.max).toInt()
+            registerPlaybackCallback()
+            currentController?.let {
+                updateCurrentMusicInfo()
+                updatePlayOrPauseButton(it.getState())
+            }
         }
+
+        // 初始化进度条监听器
+        mProgressBarView.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
+                if (fromUser) {
+                    currentController?.transportControls?.seekTo(progress.toLong())
+                    updateProgressBar(progress.toLong())
+                }
+            }
+
+            override fun onStartTrackingTouch(seekBar: SeekBar?) {}
+
+            override fun onStopTrackingTouch(seekBar: SeekBar?) {}
+        })
 
 
         // 上一首
@@ -171,6 +134,39 @@ class MusicCardView @JvmOverloads constructor(
         // 下一首
         mNextView.setOnClickListener {
             playNext()
+        }
+    }
+
+    private fun registerPlaybackCallback() {
+        playbackCallback = object : MediaController.Callback() {
+            // 播放状态更改
+            override fun onPlaybackStateChanged(playbackState: PlaybackState?) {
+                super.onPlaybackStateChanged(playbackState)
+                playbackState?.let {
+                    updatePlayOrPauseButton(it.state)
+                    updateProgressBar(it.position)
+                }
+            }
+
+            // 音乐信息更改
+            override fun onMetadataChanged(metadata: MediaMetadata?) {
+                metadata?.let {
+                    updateCurrentMusicInfo()
+                }
+            }
+        }
+        currentController?.registerCallback(playbackCallback as MediaController.Callback)
+    }
+
+    /**
+     * 更新数据模型的进度数据
+     */
+    private fun updateProgressBar(progress: Long) {
+        if (currentController != null && currentMediaInfoBean != null) {
+            val duration = currentMediaInfoBean!!.duration
+            currentMediaInfoBean!!.progressBar = if (duration > 0)
+                (progress.toFloat() / duration.toFloat())
+            else 0.0f
         }
     }
 
@@ -206,36 +202,28 @@ class MusicCardView @JvmOverloads constructor(
     fun playMusic() {
         currentController?.let { controller ->
             controller.transportControls.play()
-            updatePlayOrPauseButton(MediaInfoBean.PLAYER_STATE_PLAYING)
-            updateCurrentMusicInfo()
-            Logger.d("点击播放, 当前状态: ${getPlayerState()}")
+            Logger.d("点击播放, 当前状态: ${controller.getState()}")
         }
     }
 
     fun pauseMusic() {
         currentController?.let { controller ->
             controller.transportControls.pause()
-            updatePlayOrPauseButton(MediaInfoBean.PLAYER_STATE_PAUSED)
-            updateCurrentMusicInfo()
-            Logger.d("点击暂停, 当前状态: ${getPlayerState()}")
+            Logger.d("点击暂停, 当前状态: ${controller.getState()}")
         }
     }
 
     fun playPrevious() {
         currentController?.let { controller ->
             controller.transportControls.skipToPrevious()
-            updatePlayOrPauseButton(MediaInfoBean.PLAYER_STATE_PLAYING)
-            updateCurrentMusicInfo()
-            Logger.d("点击上一首, 当前状态: ${getPlayerState()}")
+            Logger.d("点击上一首, 当前状态: ${controller.getState()}")
         }
     }
 
     fun playNext() {
         currentController?.let { controller ->
             controller.transportControls.skipToNext()
-            updatePlayOrPauseButton(MediaInfoBean.PLAYER_STATE_PLAYING)
-            updateCurrentMusicInfo()
-            Logger.d("点击下一首, 当前状态: ${getPlayerState()}")
+            Logger.d("点击下一首, 当前状态: ${controller.getState()}")
         }
     }
 
@@ -248,24 +236,25 @@ class MusicCardView @JvmOverloads constructor(
             MediaInfoBean.PLAYER_STATE_PAUSED, MediaInfoBean.PLAYER_STATE_TERMINATION -> {
                 mPlayView.visibility = View.VISIBLE
                 mPauseView.visibility = View.GONE
-                handler.removeCallbacks(progressRunnable)
+                stopProgressUpdate()
             }
 
             MediaInfoBean.PLAYER_STATE_PLAYING -> {
                 mPauseView.visibility = View.VISIBLE
                 mPlayView.visibility = View.GONE
-                handler.post(progressRunnable)
+                startProgressUpdate()
             }
 
             else -> {
                 mPlayView.visibility = View.VISIBLE
                 mPauseView.visibility = View.GONE
+                stopProgressUpdate()
             }
         }
     }
 
     /**
-     * 更新当前正在播放的音乐信息
+     * 手动更新当前正在播放的音乐信息
      */
     @SuppressLint("UseCompatLoadingForDrawables", "SetTextI18n")
     private fun updateCurrentMusicInfo() {
@@ -275,8 +264,7 @@ class MusicCardView @JvmOverloads constructor(
 
             currentMediaInfoBean = currentMediaAppBean?.mediaInfoBean
             Logger.d("currentMediaInfoBean: $currentMediaInfoBean")
-            Logger.d("progressBar: ${currentMediaInfoBean!!.progressBar}")
-            mMusicLogin.setImageBitmap(
+            mMusicLogo.setImageBitmap(
                 currentMediaAppBean?.logoImg
                     ?: resources.getDrawable(R.drawable.img_music, null).toBitmap()
             )
@@ -291,11 +279,20 @@ class MusicCardView @JvmOverloads constructor(
             )
             mNameAndSingerView.text =
                 currentMediaInfoBean!!.title + "-" + currentMediaInfoBean!!.artist
+
+            // 此处先设置最大值，再设置当前值，防止进度被重置
+            mProgressBarView.max = currentMediaInfoBean!!.duration.toInt()
+            mProgressBarView.progress =
+                (currentMediaInfoBean!!.progressBar * mProgressBarView.max).toInt()
         }
     }
 
-    fun getPlayerState(): Int {
-        return currentController?.playbackState?.state ?: PlaybackState.STATE_NONE
+    private fun startProgressUpdate() {
+        handler.post(progressRunnable)
+    }
+
+    private fun stopProgressUpdate() {
+        handler.removeCallbacks(progressRunnable)
     }
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
@@ -312,7 +309,7 @@ class MusicCardView @JvmOverloads constructor(
 
     override fun onDetachedFromWindow() {
         super.onDetachedFromWindow()
-        handler.removeCallbacks(progressRunnable)
+        stopProgressUpdate()
         playbackCallback?.let { currentController?.unregisterCallback(it) }
     }
 

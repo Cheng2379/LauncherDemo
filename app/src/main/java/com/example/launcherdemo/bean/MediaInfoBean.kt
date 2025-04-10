@@ -13,7 +13,7 @@ data class MediaInfoBean(
     val title: String,
     // 艺术家、歌手
     val artist: String,
-    // 播放状态: 0 -> 暂停， 1 -> 播放   2 -> 终止
+    // 播放状态:    1 -> 终止    2 -> 暂停    3 -> 播放
     val playerStatus: Int = PLAYER_STATE_PAUSED,
     val albumBitmap: Bitmap?,
     // 当前进度百分比, 小数格式

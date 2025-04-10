@@ -12,7 +12,7 @@ data class MediaAppBean(
     val appName: String,
     val packageName: String,
     val logoImg: Bitmap?,
-    val mediaInfoBean: MediaInfoBean,
+    val mediaInfoBean: MediaInfoBean?,
     // 一个音乐软件对应一个控制器
     val mediaController: MediaController
 )
