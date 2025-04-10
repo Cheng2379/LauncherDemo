@@ -7,13 +7,13 @@ import android.graphics.drawable.Drawable
  * @author cheng
  * @since 2025/4/1
  */
-class AppInfo(
+class AppInfoBean(
     val packageName: String,
     val mainActivity: String,
     val appName: String,
     val icon: Drawable
 ) {
     override fun toString(): String {
-        return "AppInfo(packageName='$packageName', mainClassName='$mainActivity', appName='$appName', icon=$icon)"
+        return "AppInfoBean(packageName='$packageName', mainClassName='$mainActivity', appName='$appName', icon=$icon)"
     }
 }

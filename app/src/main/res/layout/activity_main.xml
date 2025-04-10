@@ -1,18 +1,26 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/main"
-    android:orientation="vertical"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@drawable/backround"
+    android:background="@drawable/img_background"
+    android:orientation="vertical"
     tools:context=".MainActivity">
     
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/rv_main"
-        app:layoutManager="androidx.recyclerview.widget.GridLayoutManager"
-        app:spanCount="6"
+        app:spanCount="2"
         android:layout_width="match_parent"
-        android:layout_height="match_parent" />
+        android:layout_height="200dp"
+        android:orientation="horizontal"
+        app:layoutManager="androidx.recyclerview.widget.GridLayoutManager" />
+    
+    <com.example.launcherdemo.view.MusicCardView
+        android:id="@+id/music_card_view"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginTop="30dp" />
 </LinearLayout>
