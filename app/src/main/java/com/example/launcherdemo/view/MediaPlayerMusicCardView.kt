@@ -37,8 +37,6 @@ class MediaPlayerMusicCardView @JvmOverloads constructor(
     private val view: View by lazy {
         LayoutInflater.from(context).inflate(R.layout.view_card_music, this, false)
     }
-    private val mResourceView: TextView by lazy { view.findViewById(R.id.music_resource) }
-    private val mSwitchMusicView: ImageView by lazy { view.findViewById(R.id.music_switch_resource) }
     private val mAlbumView: ImageView by lazy { view.findViewById(R.id.music_album) }
     private val mNameAndSingerView: TextView by lazy { view.findViewById(R.id.music_name_and_singer) }
     private val mProgressBarView: SeekBar by lazy { view.findViewById(R.id.music_progressbar) }
@@ -97,7 +95,6 @@ class MediaPlayerMusicCardView @JvmOverloads constructor(
             it.isNotEmpty()
         }?.let {
             Logger.d("music: $it")
-            mResourceView.text = "本地\n音乐"
             mNameAndSingerView.text = it[0].title + "-" + it[0].artist
             it[0].albumBitmap?.let { bitmap ->
                 mAlbumView.setImageBitmap(bitmap)
@@ -160,7 +157,6 @@ class MediaPlayerMusicCardView @JvmOverloads constructor(
             }
             Logger.d("开始播放${mediaInfoBean.title}")
             mNameAndSingerView.text = mediaInfoBean.title + "-" + mediaInfoBean.artist
-            mResourceView.text = "本地\n音乐"
             mediaInfoBean.albumBitmap?.let {
                 mAlbumView.setImageBitmap(it)
             } ?: run {

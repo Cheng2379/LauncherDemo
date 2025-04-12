@@ -3,6 +3,8 @@ package com.example.launcherdemo.view
 import android.annotation.SuppressLint
 import android.content.ComponentName
 import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
 import android.media.MediaMetadata
 import android.media.session.MediaController
 import android.media.session.MediaSessionManager
@@ -14,19 +16,27 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
-import android.widget.PopupMenu
 import android.widget.SeekBar
 import android.widget.TextView
 import androidx.core.content.ContextCompat
 import androidx.core.graphics.drawable.toBitmap
+import androidx.fragment.app.FragmentActivity
+import androidx.media.MediaBrowserServiceCompat
 import com.example.launcherdemo.util.findImageViewById
 import com.example.launcherdemo.util.getMediaAppBean
 import com.example.launcherdemo.R
+import com.example.launcherdemo.adapter.RecyclerViewAdapter
+import com.example.launcherdemo.bean.AppInfoBean
 import com.example.launcherdemo.bean.MediaAppBean
 import com.example.launcherdemo.bean.MediaInfoBean
+import com.example.launcherdemo.fragment.LauncherDialogFragment
 import com.example.launcherdemo.service.LauncherNotificationListenerService
 import com.example.launcherdemo.util.Logger
+import com.example.launcherdemo.util.findRecyclerViewById
+import com.example.launcherdemo.util.findTextViewById
 import com.example.launcherdemo.util.getState
+import com.example.launcherdemo.util.launchApp
+import java.util.ArrayList
 
 
 /**
@@ -40,19 +50,18 @@ class MusicCardView @JvmOverloads constructor(
     attrs: AttributeSet? = null,
     defStyleAttr: Int = 0
 ) : ViewGroup(context, attrs, defStyleAttr) {
-    private val view: View by lazy {
+    private val mView: View by lazy {
         LayoutInflater.from(context).inflate(R.layout.view_card_music, this, false)
     }
-    private val mMusicLogo by lazy { view.findImageViewById(R.id.music_logo) }
-    private val mResourceView: TextView by lazy { view.findViewById(R.id.music_resource) }
-    private val mSwitchMusicView: ImageView by lazy { view.findViewById(R.id.music_switch_resource) }
-    private val mAlbumView: ImageView by lazy { view.findViewById(R.id.music_album) }
-    private val mNameAndSingerView: TextView by lazy { view.findViewById(R.id.music_name_and_singer) }
-    private val mProgressBarView: SeekBar by lazy { view.findViewById(R.id.music_progressbar) }
-    private val mPrevious: ImageView by lazy { view.findViewById(R.id.music_previous) }
-    private val mPlayView: ImageView by lazy { view.findViewById(R.id.music_play) }
-    private val mPauseView: ImageView by lazy { view.findViewById(R.id.music_pause) }
-    private val mNextView: ImageView by lazy { view.findViewById(R.id.music_next) }
+    private val mMusicLogo by lazy { mView.findImageViewById(R.id.music_logo) }
+    private val mZoomView by lazy { mView.findImageViewById(R.id.music_card_zoom) }
+    private val mAlbumView: ImageView by lazy { mView.findViewById(R.id.music_album) }
+    private val mNameAndSingerView: TextView by lazy { mView.findViewById(R.id.music_name_and_singer) }
+    private val mProgressBarView: SeekBar by lazy { mView.findViewById(R.id.music_progressbar) }
+    private val mPrevious: ImageView by lazy { mView.findViewById(R.id.music_previous) }
+    private val mPlayView: ImageView by lazy { mView.findViewById(R.id.music_play) }
+    private val mPauseView: ImageView by lazy { mView.findViewById(R.id.music_pause) }
+    private val mNextView: ImageView by lazy { mView.findViewById(R.id.music_next) }
 
     private var mediaSessionManager: MediaSessionManager? = null
     private var sessionListener: MediaSessionManager.OnActiveSessionsChangedListener? = null
@@ -61,17 +70,18 @@ class MusicCardView @JvmOverloads constructor(
     private var currentController: MediaController? = null
 
     private var currentMediaAppBean: MediaAppBean? = null
-    private var currentMediaInfoBean: MediaInfoBean? = null
+
+    private var allMediaApps: List<AppInfoBean> = emptyList()
 
     //  保存当前活跃的音乐app列表
-    private val allActiveMusicList = mutableListOf<MediaAppBean>()
+    private val activeMusicList = mutableListOf<MediaAppBean>()
 
     private val handler = Handler(Looper.getMainLooper())
     private val progressRunnable = object : Runnable {
         override fun run() {
             currentController?.let { controller ->
                 val progress = controller.playbackState?.position ?: 0L
-                currentMediaInfoBean?.let { mediaInfoBean ->
+                currentMediaAppBean?.mediaInfoBean?.let { mediaInfoBean ->
                     val duration = mediaInfoBean.duration
                     mediaInfoBean.progressBar = if (duration > 0)
                         (progress.toFloat() / duration.toFloat())
@@ -87,8 +97,9 @@ class MusicCardView @JvmOverloads constructor(
     private var playbackCallback: MediaController.Callback? = null
 
     init {
-        addView(view)
+        addView(mView)
         initView()
+        allMediaApps = getAllMediaApp()
     }
 
     @SuppressLint("UseCompatLoadingForDrawables", "SetTextI18n")
@@ -126,11 +137,50 @@ class MusicCardView @JvmOverloads constructor(
             playNext()
         }
 
-        // 切换音源
-        //mSwitchMusicView.setOnClickListener {
-        //    val view = LayoutInflater.from(context).inflate(R.layout.item_media_app, this, false)
-        //    val popupMenu = PopupMenu(context, view)
-        //}
+        mView.setOnClickListener {
+            currentMediaAppBean?.let {
+                launchApp(context, it.packageName)
+            } ?: run {
+                openDialog()
+            }
+        }
+        mView.setOnLongClickListener {
+            openDialog()
+            true
+        }
+
+        // 缩放
+        mZoomView.setOnClickListener {
+        }
+    }
+
+    /**
+     * 获取所有的应用列表信息
+     */
+    private fun getAllMediaApp(): List<AppInfoBean> {
+        val allMediaAppInfoList = mutableListOf<AppInfoBean>()
+        val intent = Intent(MediaBrowserServiceCompat.SERVICE_INTERFACE)
+        val services =
+            context.packageManager.queryIntentServices(intent, PackageManager.GET_RESOLVED_FILTER)
+        services.takeIf {
+            it.isNotEmpty()
+        }?.let { list ->
+            list.forEach { resolveInfo ->
+                resolveInfo.serviceInfo?.let { service ->
+                    allMediaAppInfoList.add(
+                        AppInfoBean(
+                            service.packageName,
+                            service.name,
+                            resolveInfo.loadLabel(context.packageManager).toString(),
+                            resolveInfo.loadIcon(context.packageManager)
+                        )
+                    )
+                }
+            }
+            return allMediaAppInfoList
+        } ?: run {
+            return emptyList()
+        }
     }
 
     /**
@@ -162,9 +212,9 @@ class MusicCardView @JvmOverloads constructor(
      * 更新数据模型的进度数据
      */
     private fun updateProgressBar(progress: Long) {
-        if (currentController != null && currentMediaInfoBean != null) {
-            val duration = currentMediaInfoBean!!.duration
-            currentMediaInfoBean!!.progressBar = if (duration > 0)
+        if (currentController != null) {
+            val duration = currentMediaAppBean?.mediaInfoBean?.duration ?: 0
+            currentMediaAppBean?.mediaInfoBean?.progressBar = if (duration > 0)
                 (progress.toFloat() / duration.toFloat())
             else 0.0f
         }
@@ -198,7 +248,7 @@ class MusicCardView @JvmOverloads constructor(
             resetUI()
         }
 
-        Logger.i("allActiveMusicList: $allActiveMusicList")
+        Logger.i("allActiveMusicList: $activeMusicList")
     }
 
     /**
@@ -207,10 +257,14 @@ class MusicCardView @JvmOverloads constructor(
     private fun resetUI() {
         currentController = null
         currentMediaAppBean = null
-        currentMediaInfoBean = null
-        mMusicLogo.setImageDrawable(ContextCompat.getDrawable(context, R.drawable.img_music))
-        mResourceView.text = "暂无音源"
-        mAlbumView.setImageDrawable(ContextCompat.getDrawable(context, R.drawable.img_album))
+        mMusicLogo.apply {
+            setImageDrawable(ContextCompat.getDrawable(context, R.drawable.img_music))
+            clipToOutline = true
+        }
+        mAlbumView.apply {
+            setImageDrawable(ContextCompat.getDrawable(context, R.drawable.img_album))
+            clipToOutline = true
+        }
         mNameAndSingerView.text = "无播放"
         mProgressBarView.progress = 0
         mPlayView.visibility = View.VISIBLE
@@ -221,14 +275,14 @@ class MusicCardView @JvmOverloads constructor(
      * 处理实时媒体会话
      */
     fun handleActiveSessionsChanged(controllerList: List<MediaController>?) {
-        allActiveMusicList.clear()
+        activeMusicList.clear()
         if (!controllerList.isNullOrEmpty()) {
             var playingController: MediaController? = null
 
             controllerList.forEach { controller ->
                 controller.packageName?.let {
                     controller.getMediaAppBean()?.let {
-                        allActiveMusicList.add(it)
+                        activeMusicList.add(it)
 
                         // 获取正在活跃的媒体应用Controller
                         if (playingController == null && controller.getState() == PlaybackState.STATE_PLAYING) {
@@ -247,34 +301,10 @@ class MusicCardView @JvmOverloads constructor(
             } ?: resetUI()
         } else {
             Logger.d("没有活动的媒体应用")
-            allActiveMusicList.clear()
+            activeMusicList.clear()
             resetUI()
         }
-    }
-
-
-    fun playMusic() {
-        currentController?.let { controller ->
-            controller.transportControls.play()
-        }
-    }
-
-    fun pauseMusic() {
-        currentController?.let { controller ->
-            controller.transportControls.pause()
-        }
-    }
-
-    fun playPrevious() {
-        currentController?.let { controller ->
-            controller.transportControls.skipToPrevious()
-        }
-    }
-
-    fun playNext() {
-        currentController?.let { controller ->
-            controller.transportControls.skipToNext()
-        }
+        Logger.d("allActiveMusic: $activeMusicList")
     }
 
     /**
@@ -311,30 +341,62 @@ class MusicCardView @JvmOverloads constructor(
             // 获取并设置最新的数据
             currentMediaAppBean = controller.getMediaAppBean()
 
-            currentMediaInfoBean = currentMediaAppBean?.mediaInfoBean
-            Logger.d("currentMediaInfoBean: $currentMediaInfoBean")
-            mMusicLogo.setImageBitmap(
-                currentMediaAppBean?.logoImg
-                    ?: resources.getDrawable(R.drawable.img_music, null).toBitmap()
-            )
-            mResourceView.text = currentMediaAppBean?.appName ?: "媒体中心"
-
-            currentMediaInfoBean?.let {
-                mAlbumView.setImageBitmap(
-                    it.albumBitmap ?: resources.getDrawable(
-                        R.drawable.img_album,
-                        null
-                    )
-                        .toBitmap()
+            Logger.i("currentMediaApp: $currentMediaAppBean")
+            mMusicLogo.apply {
+                setImageBitmap(
+                    currentMediaAppBean?.logoImg
+                        ?: resources.getDrawable(R.drawable.img_music, null).toBitmap()
                 )
+                clipToOutline = true
+            }
+
+            currentMediaAppBean?.mediaInfoBean?.let {
+                mAlbumView.apply {
+                    setImageBitmap(
+                        it.albumBitmap ?: resources.getDrawable(
+                            R.drawable.img_album,
+                            null
+                        ).toBitmap()
+                    )
+                    clipToOutline = true
+                }
                 mNameAndSingerView.text =
                     it.title + "-" + it.artist
+                // 设置跑马灯
+                //mNameAndSingerView.isFocusable = true
+                //mNameAndSingerView.marqueeRepeatLimit = -1
+                //mNameAndSingerView.isFocusableInTouchMode = true
+                //mNameAndSingerView.requestFocus()
 
                 // 此处先设置最大值，再设置当前值，防止进度被重置
                 mProgressBarView.max = it.duration.toInt()
                 mProgressBarView.progress =
                     (it.progressBar * mProgressBarView.max).toInt()
             }
+        }
+    }
+
+    fun playMusic() {
+        currentController?.let { controller ->
+            controller.transportControls.play()
+        }
+    }
+
+    fun pauseMusic() {
+        currentController?.let { controller ->
+            controller.transportControls.pause()
+        }
+    }
+
+    fun playPrevious() {
+        currentController?.let { controller ->
+            controller.transportControls.skipToPrevious()
+        }
+    }
+
+    fun playNext() {
+        currentController?.let { controller ->
+            controller.transportControls.skipToNext()
         }
     }
 
@@ -346,16 +408,57 @@ class MusicCardView @JvmOverloads constructor(
         handler.removeCallbacks(progressRunnable)
     }
 
+    /**
+     * 展示所有媒体应用的弹窗
+     */
+    private fun openDialog() {
+        val dialogFragment =
+            LauncherDialogFragment(R.layout.dialog_fg_music_app_info) { view, dialog ->
+                val closeImg = view.findImageViewById(R.id.music_app_info_close)
+                val appRv = view.findRecyclerViewById(R.id.media_rv_app)
+
+                appRv.adapter = RecyclerViewAdapter(
+                    context,
+                    ArrayList(allMediaApps),
+                    R.layout.item_app
+                ) { viewHolder, position ->
+                    val appInfoBean = allMediaApps[position]
+                    val iconView = viewHolder.itemView.findImageViewById(R.id.app_icon)
+                    val appNameView = viewHolder.itemView.findTextViewById(R.id.app_name)
+
+                    iconView.apply {
+                        background =
+                            ContextCompat.getDrawable(context, R.drawable.shape_img_selector)
+                        clipToOutline = true
+                        setImageDrawable(appInfoBean.icon)
+                    }
+                    appNameView.text = appInfoBean.appName
+                    appNameView.setTextColor(context.resources.getColor(R.color.black))
+
+                    viewHolder.itemView.setOnClickListener {
+                        launchApp(context, appInfoBean.packageName)
+                    }
+                }
+
+                closeImg.setOnClickListener {
+                    dialog.dismiss()
+                }
+            }
+        (context as? FragmentActivity)?.let {
+            dialogFragment.show(it.supportFragmentManager, "MediaAppExhibit")
+        } ?: Logger.e("Context is not a FragmentActivity, show dialog fail!")
+    }
+
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         // 测量子视图
-        measureChild(view, widthMeasureSpec, heightMeasureSpec)
+        measureChild(mView, widthMeasureSpec, heightMeasureSpec)
         // 测量自身尺寸为子视图准备的尺寸
-        setMeasuredDimension(view.measuredWidth, view.measuredHeight)
+        setMeasuredDimension(mView.measuredWidth, mView.measuredHeight)
     }
 
     override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
         // 布局子视图
-        view.layout(0, 0, view.measuredWidth, measuredHeight)
+        mView.layout(0, 0, mView.measuredWidth, measuredHeight)
     }
 
     override fun onDetachedFromWindow() {

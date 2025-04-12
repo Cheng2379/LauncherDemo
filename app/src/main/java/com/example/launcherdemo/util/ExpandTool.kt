@@ -1,5 +1,6 @@
 package com.example.launcherdemo.util
 
+import android.content.Context
 import android.content.Intent
 import android.media.MediaMetadata
 import android.media.session.MediaController
@@ -82,6 +83,31 @@ fun EditText.textChangedListener(
     }
     // 添加监听器
     this.addTextChangedListener(textWatcher)
+}
+
+/**
+ * 启动App
+ */
+fun launchApp(context: Context, packageName: String) {
+    // 跳转方式一
+    /*val intent = Intent()
+    intent.setComponent(
+        ComponentName(
+            appInfo.packageName,
+            appInfo.mainActivity
+        )
+    )
+    intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    this.startActivity(intent)*/
+    // 跳转方式二, 稳定写法
+    val intent = context.packageManager.getLaunchIntentForPackage(packageName)?.apply {
+        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    }
+    intent?.let {
+        context.startActivity(intent)
+    } ?: {
+        "未找到应用, 无法启动".showToast()
+    }
 }
 
 /**

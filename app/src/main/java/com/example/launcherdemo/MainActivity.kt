@@ -2,17 +2,13 @@ package com.example.launcherdemo
 
 import android.Manifest
 import android.content.BroadcastReceiver
-import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
-import android.content.ServiceConnection
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
-import android.os.IBinder
 import android.provider.Settings
-import android.support.v4.media.session.MediaControllerCompat
 import android.view.View
 import android.widget.ImageView
 import android.widget.PopupMenu
@@ -35,6 +31,7 @@ import kotlinx.coroutines.withContext
 import androidx.core.net.toUri
 import com.example.launcherdemo.util.Logger
 import com.example.launcherdemo.util.PermissionUtil
+import com.example.launcherdemo.util.launchApp
 import com.example.launcherdemo.view.MusicCardView
 import kotlinx.coroutines.delay
 
@@ -224,35 +221,6 @@ class MainActivity : AppCompatActivity() {
             withContext(Dispatchers.Main) {
                 mRvAdapter?.updateAll(appInfoBeanList)
             }
-        }
-    }
-
-    /**
-     * 启动App
-     */
-    private fun launchApp(context: Context, packageName: String) {
-        // 跳转方式一
-        /*val intent = Intent()
-        intent.setComponent(
-            ComponentName(
-                appInfo.packageName,
-                appInfo.mainActivity
-            )
-        )
-        intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        this.startActivity(intent)*/
-        // 跳转方式二, 稳定写法
-        val intent = context.packageManager.getLaunchIntentForPackage(packageName)?.apply {
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        }
-        intent?.let {
-            try {
-                context.startActivity(intent)
-            } catch (e: Exception) {
-                Toast.makeText(context, "无法启动应用", Toast.LENGTH_SHORT).show()
-            }
-        } ?: {
-            Toast.makeText(context, "无法启动应用: 未找到启动意图", Toast.LENGTH_SHORT).show()
         }
     }
 
