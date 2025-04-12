@@ -77,6 +77,7 @@ class MusicCardView @JvmOverloads constructor(
     private val activeMusicList = mutableListOf<MediaAppBean>()
 
     private val handler = Handler(Looper.getMainLooper())
+
     private val progressRunnable = object : Runnable {
         override fun run() {
             currentController?.let { controller ->
@@ -94,6 +95,38 @@ class MusicCardView @JvmOverloads constructor(
         }
     }
 
+    private val checkActiveMediaRunnable = object : Runnable {
+        override fun run() {
+            try {
+                val componentName =
+                    ComponentName(context, LauncherNotificationListenerService::class.java)
+                val activeSession = mediaSessionManager?.getActiveSessions(componentName)
+                activeSession?.let { controllers ->
+                    var firstPlayingController: MediaController? = null
+
+                    controllers.forEach { controller ->
+                        val state = controller.getState()
+                        if (state == PlaybackState.STATE_PLAYING) {
+                            firstPlayingController = controller
+                            return@forEach
+                        }
+                    }
+                    if (firstPlayingController != null && currentController?.packageName != firstPlayingController?.packageName) {
+                        currentController = firstPlayingController
+                        registerPlaybackCallback()
+                        updateCurrentMusicInfo()
+                        updatePlayOrPauseButton(
+                            currentController?.getState() ?: PlaybackState.STATE_NONE
+                        )
+                    }
+                }
+                handler.postDelayed(this, 3000)
+            } catch (e: Exception) {
+                Logger.e("Error checking active media: ${e.message}")
+            }
+        }
+    }
+
     private var playbackCallback: MediaController.Callback? = null
 
     init {
@@ -105,6 +138,7 @@ class MusicCardView @JvmOverloads constructor(
     @SuppressLint("UseCompatLoadingForDrawables", "SetTextI18n")
     fun initView() {
         registerSessionChangedListener()
+        handler.postDelayed(checkActiveMediaRunnable, 3000)
         // 初始化进度条监听器
         mProgressBarView.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
@@ -195,6 +229,11 @@ class MusicCardView @JvmOverloads constructor(
                 playbackState?.let {
                     updatePlayOrPauseButton(it.state)
                     updateProgressBar(it.position)
+
+                    // 当状态变为播放时，更新当前音乐信息
+                    if (playbackState.state == PlaybackState.STATE_PLAYING) {
+                        updateCurrentMusicInfo()
+                    }
                 }
             }
 
@@ -258,7 +297,7 @@ class MusicCardView @JvmOverloads constructor(
         currentController = null
         currentMediaAppBean = null
         mMusicLogo.apply {
-            setImageDrawable(ContextCompat.getDrawable(context, R.drawable.img_music))
+            setImageDrawable(ContextCompat.getDrawable(context, R.drawable.img_logo))
             clipToOutline = true
         }
         mAlbumView.apply {
@@ -278,6 +317,7 @@ class MusicCardView @JvmOverloads constructor(
         activeMusicList.clear()
         if (!controllerList.isNullOrEmpty()) {
             var playingController: MediaController? = null
+            val previousPackageName = currentController?.packageName
 
             controllerList.forEach { controller ->
                 controller.packageName?.let {
@@ -293,10 +333,17 @@ class MusicCardView @JvmOverloads constructor(
                     Logger.e("not find app, packageName: ${controller.packageName}")
                 }
             }
-            currentController = playingController ?: controllerList.firstOrNull()
+            val newController = playingController ?: controllerList.firstOrNull()
+            // 增加新旧控制器和包名对比, 判断是否需要更新媒体UI信息
+            val needUpdateUi = currentController != newController || (newController != null
+                    && previousPackageName != newController.packageName)
+
+            currentController = newController
             currentController?.let {
                 registerPlaybackCallback()
-                updateCurrentMusicInfo()
+                if (needUpdateUi) {
+                    updateCurrentMusicInfo()
+                }
                 updatePlayOrPauseButton(it.getState())
             } ?: resetUI()
         } else {
@@ -311,29 +358,31 @@ class MusicCardView @JvmOverloads constructor(
      * 更新播放或暂停按钮状态
      */
     private fun updatePlayOrPauseButton(playerStatus: Int) {
-        when (playerStatus) {
-            MediaInfoBean.PLAYER_STATE_PAUSED, MediaInfoBean.PLAYER_STATE_TERMINATION -> {
-                mPlayView.visibility = View.VISIBLE
-                mPauseView.visibility = View.GONE
-                stopProgressUpdate()
-            }
+        handler.post {
+            when (playerStatus) {
+                MediaInfoBean.PLAYER_STATE_PAUSED, MediaInfoBean.PLAYER_STATE_TERMINATION -> {
+                    mPlayView.visibility = View.VISIBLE
+                    mPauseView.visibility = View.GONE
+                    stopProgressUpdate()
+                }
 
-            MediaInfoBean.PLAYER_STATE_PLAYING -> {
-                mPauseView.visibility = View.VISIBLE
-                mPlayView.visibility = View.GONE
-                startProgressUpdate()
-            }
+                MediaInfoBean.PLAYER_STATE_PLAYING -> {
+                    mPauseView.visibility = View.VISIBLE
+                    mPlayView.visibility = View.GONE
+                    startProgressUpdate()
+                }
 
-            else -> {
-                mPlayView.visibility = View.VISIBLE
-                mPauseView.visibility = View.GONE
-                stopProgressUpdate()
+                else -> {
+                    mPlayView.visibility = View.VISIBLE
+                    mPauseView.visibility = View.GONE
+                    stopProgressUpdate()
+                }
             }
         }
     }
 
     /**
-     * 手动更新当前正在播放的音乐信息
+     * 更新当前正在播放的音乐信息
      */
     @SuppressLint("UseCompatLoadingForDrawables", "SetTextI18n")
     private fun updateCurrentMusicInfo() {
@@ -345,7 +394,7 @@ class MusicCardView @JvmOverloads constructor(
             mMusicLogo.apply {
                 setImageBitmap(
                     currentMediaAppBean?.logoImg
-                        ?: resources.getDrawable(R.drawable.img_music, null).toBitmap()
+                        ?: resources.getDrawable(R.drawable.img_logo, null).toBitmap()
                 )
                 clipToOutline = true
             }
@@ -377,27 +426,23 @@ class MusicCardView @JvmOverloads constructor(
     }
 
     fun playMusic() {
-        currentController?.let { controller ->
-            controller.transportControls.play()
-        }
+        currentController?.transportControls?.play()
+            ?: Logger.w("playMusic: currentController is null, cannot play")
     }
 
     fun pauseMusic() {
-        currentController?.let { controller ->
-            controller.transportControls.pause()
-        }
+        currentController?.transportControls?.pause()
+            ?: Logger.w("playMusic: currentController is null, cannot pause")
     }
 
     fun playPrevious() {
-        currentController?.let { controller ->
-            controller.transportControls.skipToPrevious()
-        }
+        currentController?.transportControls?.skipToPrevious()
+            ?: Logger.w("playMusic: currentController is null, cannot skipToPrevious")
     }
 
     fun playNext() {
-        currentController?.let { controller ->
-            controller.transportControls.skipToNext()
-        }
+        currentController?.transportControls?.skipToNext()
+            ?: Logger.w("playMusic: currentController is null, cannot skipToNext")
     }
 
     private fun startProgressUpdate() {
@@ -465,6 +510,7 @@ class MusicCardView @JvmOverloads constructor(
         super.onDetachedFromWindow()
 
         stopProgressUpdate()
+        handler.removeCallbacks(checkActiveMediaRunnable)
         playbackCallback?.let { currentController?.unregisterCallback(it) }
         sessionListener?.let { mediaSessionManager?.removeOnActiveSessionsChangedListener(it) }
     }
