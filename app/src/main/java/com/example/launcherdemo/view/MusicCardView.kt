@@ -32,6 +32,7 @@ import com.example.launcherdemo.bean.MediaInfoBean
 import com.example.launcherdemo.fragment.LauncherDialogFragment
 import com.example.launcherdemo.service.LauncherNotificationListenerService
 import com.example.launcherdemo.util.Logger
+import com.example.launcherdemo.util.PermissionUtil
 import com.example.launcherdemo.util.findRecyclerViewById
 import com.example.launcherdemo.util.findTextViewById
 import com.example.launcherdemo.util.getState
@@ -131,13 +132,22 @@ class MusicCardView @JvmOverloads constructor(
 
     init {
         addView(mView)
-        initView()
-        allMediaApps = getAllMediaApp()
+        // 判断权限再展示
+        if (PermissionUtil.isNotificationServiceEnabled(
+                context.contentResolver,
+                context.packageName
+            )
+        ) {
+            initView()
+        }
     }
 
     @SuppressLint("UseCompatLoadingForDrawables", "SetTextI18n")
     fun initView() {
         registerSessionChangedListener()
+
+        allMediaApps = getAllMediaApp()
+
         handler.postDelayed(checkActiveMediaRunnable, 3000)
         // 初始化进度条监听器
         mProgressBarView.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
@@ -411,7 +421,7 @@ class MusicCardView @JvmOverloads constructor(
                 }
                 mNameAndSingerView.text =
                     it.title + "-" + it.artist
-                // 设置跑马灯
+                // TODO 设置跑马灯
                 //mNameAndSingerView.isFocusable = true
                 //mNameAndSingerView.marqueeRepeatLimit = -1
                 //mNameAndSingerView.isFocusableInTouchMode = true
@@ -492,6 +502,13 @@ class MusicCardView @JvmOverloads constructor(
         (context as? FragmentActivity)?.let {
             dialogFragment.show(it.supportFragmentManager, "MediaAppExhibit")
         } ?: Logger.e("Context is not a FragmentActivity, show dialog fail!")
+    }
+
+    /**
+     * TODO 设置缩放样式
+     */
+    private fun setScaleView() {
+
     }
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
