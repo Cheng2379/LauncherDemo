@@ -35,6 +35,7 @@ import com.example.launcherdemo.util.Logger
 import com.example.launcherdemo.util.PermissionUtil
 import com.example.launcherdemo.util.findRecyclerViewById
 import com.example.launcherdemo.util.findTextViewById
+import com.example.launcherdemo.util.getViewParentWidth
 import com.example.launcherdemo.util.getState
 import com.example.launcherdemo.util.launchApp
 import java.util.ArrayList
@@ -115,7 +116,7 @@ class MusicCardView @JvmOverloads constructor(
                     if (firstPlayingController != null && currentController?.packageName != firstPlayingController?.packageName) {
                         currentController = firstPlayingController
                         registerPlaybackCallback()
-                        updateCurrentMusicInfo()
+                        updateCurrentMusicCardView()
                         updatePlayOrPauseButton(
                             currentController?.getState() ?: PlaybackState.STATE_NONE
                         )
@@ -242,7 +243,7 @@ class MusicCardView @JvmOverloads constructor(
 
                     // 当状态变为播放时，更新当前音乐信息
                     if (playbackState.state == PlaybackState.STATE_PLAYING) {
-                        updateCurrentMusicInfo()
+                        updateCurrentMusicCardView()
                     }
                 }
             }
@@ -250,7 +251,7 @@ class MusicCardView @JvmOverloads constructor(
             // 音乐信息更改
             override fun onMetadataChanged(metadata: MediaMetadata?) {
                 metadata?.let {
-                    updateCurrentMusicInfo()
+                    updateCurrentMusicCardView()
                 }
             }
         }
@@ -352,7 +353,7 @@ class MusicCardView @JvmOverloads constructor(
             currentController?.let {
                 registerPlaybackCallback()
                 if (needUpdateUi) {
-                    updateCurrentMusicInfo()
+                    updateCurrentMusicCardView()
                 }
                 updatePlayOrPauseButton(it.getState())
             } ?: resetUI()
@@ -392,10 +393,10 @@ class MusicCardView @JvmOverloads constructor(
     }
 
     /**
-     * 更新当前正在播放的音乐信息
+     * 更新当前正在播放的音乐视图信息
      */
     @SuppressLint("UseCompatLoadingForDrawables", "SetTextI18n")
-    private fun updateCurrentMusicInfo() {
+    private fun updateCurrentMusicCardView() {
         currentController?.let { controller ->
             // 获取并设置最新的数据
             currentMediaAppBean = controller.getMediaAppBean()
@@ -422,6 +423,9 @@ class MusicCardView @JvmOverloads constructor(
                 mNameAndSingerView.text =
                     it.title + "-" + it.artist
                 // TODO 设置跑马灯
+                mNameAndSingerView.getViewParentWidth { partntWidth, parentHeight ->
+                    Logger.d("parentWidth: $partntWidth")
+                }
                 //mNameAndSingerView.isFocusable = true
                 //mNameAndSingerView.marqueeRepeatLimit = -1
                 //mNameAndSingerView.isFocusableInTouchMode = true

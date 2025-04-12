@@ -190,10 +190,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     private suspend fun getAppInfoList(): List<AppInfoBean> = withContext(Dispatchers.IO) {
-        val mainIntent = Intent(Intent.ACTION_MAIN).apply {
-            addCategory(Intent.CATEGORY_LAUNCHER)
-        }
         return@withContext mutableListOf<AppInfoBean>().apply {
+            val mainIntent = Intent(Intent.ACTION_MAIN).apply {
+                addCategory(Intent.CATEGORY_LAUNCHER)
+            }
             packageManager.queryIntentActivities(mainIntent, PackageManager.GET_META_DATA)
                 .mapNotNull { resolveInfo ->
                     resolveInfo.activityInfo?.packageName

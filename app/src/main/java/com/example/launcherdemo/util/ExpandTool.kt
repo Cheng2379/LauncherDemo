@@ -122,9 +122,11 @@ fun MediaController.getMediaAppBean(): MediaAppBean? {
         val appName = packageManager.getApplicationLabel(applicationInfo).toString()
         val appIcon = packageManager.getApplicationIcon(applicationInfo).toBitmap()
 
-        MediaAppBean(appName, packageName, appIcon,
+        MediaAppBean(
+            appName, packageName, appIcon,
             this.getMediaInfoBean(),
-            this)
+            this
+        )
     } ?: run { null }
 }
 
@@ -168,6 +170,17 @@ fun MediaController.getState(): Int {
  */
 fun MediaController.getPosition(): Long {
     return this.playbackState?.position ?: 0
+}
+
+/**
+ * 获取父视图宽高
+ */
+fun View.getViewParentWidth(callback: (Int, Int) -> Unit) {
+    post {
+        val parentWidth = (parent as? View)?.width ?: 0
+        val parentHeight = (parent as? View)?.height ?: 0
+        callback(parentWidth, parentHeight)
+    }
 }
 
 fun View.findTextViewById(id: Int): TextView = findViewById(id)
