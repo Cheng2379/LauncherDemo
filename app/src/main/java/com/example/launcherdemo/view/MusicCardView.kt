@@ -423,8 +423,8 @@ class MusicCardView @JvmOverloads constructor(
                 mNameAndSingerView.text =
                     it.title + "-" + it.artist
                 // TODO 设置跑马灯
-                mNameAndSingerView.getViewParentWidth { partntWidth, parentHeight ->
-                    Logger.d("parentWidth: $partntWidth")
+                mNameAndSingerView.getViewParentWidth { parentWidth, parentHeight ->
+                    Logger.d("parentWidth: $parentWidth")
                 }
                 //mNameAndSingerView.isFocusable = true
                 //mNameAndSingerView.marqueeRepeatLimit = -1
