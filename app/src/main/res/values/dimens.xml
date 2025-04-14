@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 迷你尺寸 -->
+    <dimen name="music_card_mini_width">320dp</dimen>
+    <dimen name="music_card_mini_height">200dp</dimen>
+    
+    <!-- 中等尺寸 -->
+    <dimen name="music_card_medium_width">442dp</dimen>
+    <dimen name="music_card_medium_height">442dp</dimen>
+    
+    <!-- TODO 大尺寸 -->
+</resources>

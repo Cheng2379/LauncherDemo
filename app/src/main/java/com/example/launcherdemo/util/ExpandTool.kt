@@ -2,6 +2,7 @@ package com.example.launcherdemo.util
 
 import android.content.Context
 import android.content.Intent
+import android.graphics.Paint
 import android.media.MediaMetadata
 import android.media.session.MediaController
 import android.media.session.PlaybackState
@@ -15,6 +16,7 @@ import android.view.View
 import android.widget.Button
 import android.widget.EditText
 import android.widget.ImageView
+import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.core.graphics.drawable.toBitmap
@@ -183,6 +185,33 @@ fun View.getViewParentWidth(callback: (Int, Int) -> Unit) {
     }
 }
 
+/**
+ * 获取TextView内文本所占视图长度
+ */
+fun TextView.getTextWidthPixels(): Int {
+    val paint = Paint()
+    paint.textSize = textSize
+    paint.typeface = typeface
+    return paint.measureText(text.toString()).toInt()
+}
+
+/**
+ * 设置跑马灯
+ */
+fun TextView.setMarquee() {
+    getViewParentWidth { parentWidth, _ ->
+        val textWidth = this.getTextWidthPixels()
+        Logger.d("textWidth: $textWidth")
+        Logger.d("parentWidth: $parentWidth")
+        if (textWidth >= parentWidth) {
+            isSelected = true
+            isSingleLine = true
+        } else {
+            isSelected = false
+        }
+    }
+}
+
 fun View.findTextViewById(id: Int): TextView = findViewById(id)
 
 fun View.findEditTextById(id: Int): EditText = findViewById(id)
@@ -192,5 +221,7 @@ fun View.findButtonViewById(id: Int): Button = findViewById(id)
 fun View.findImageViewById(id: Int): ImageView = findViewById(id)
 
 fun View.findRecyclerViewById(id: Int): RecyclerView = findViewById(id)
+
+fun View.findLinearLayoutById(id: Int): LinearLayout = findViewById(id)
 
 

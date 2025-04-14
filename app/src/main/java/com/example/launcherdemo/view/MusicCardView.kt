@@ -27,17 +27,19 @@ import com.example.launcherdemo.util.getMediaAppBean
 import com.example.launcherdemo.R
 import com.example.launcherdemo.adapter.RecyclerViewAdapter
 import com.example.launcherdemo.bean.AppInfoBean
+import com.example.launcherdemo.config.CardComponentState
 import com.example.launcherdemo.bean.MediaAppBean
 import com.example.launcherdemo.bean.MediaInfoBean
 import com.example.launcherdemo.fragment.LauncherDialogFragment
 import com.example.launcherdemo.service.LauncherNotificationListenerService
 import com.example.launcherdemo.util.Logger
 import com.example.launcherdemo.util.PermissionUtil
+import com.example.launcherdemo.util.findLinearLayoutById
 import com.example.launcherdemo.util.findRecyclerViewById
 import com.example.launcherdemo.util.findTextViewById
-import com.example.launcherdemo.util.getViewParentWidth
 import com.example.launcherdemo.util.getState
 import com.example.launcherdemo.util.launchApp
+import com.example.launcherdemo.util.setMarquee
 import java.util.ArrayList
 
 
@@ -131,6 +133,8 @@ class MusicCardView @JvmOverloads constructor(
 
     private var playbackCallback: MediaController.Callback? = null
 
+    private var cardState: CardComponentState = CardComponentState.MINI
+
     init {
         addView(mView)
         // 判断权限再展示
@@ -196,6 +200,14 @@ class MusicCardView @JvmOverloads constructor(
 
         // 缩放
         mZoomView.setOnClickListener {
+            cardState = when (cardState) {
+                CardComponentState.MINI -> CardComponentState.MEDIUM
+
+                CardComponentState.MEDIUM -> CardComponentState.MINI
+
+                CardComponentState.Large -> CardComponentState.MINI
+            }
+            toggleLayoutStyle()
         }
     }
 
@@ -393,7 +405,7 @@ class MusicCardView @JvmOverloads constructor(
     }
 
     /**
-     * 更新当前正在播放的音乐视图信息
+     * 更新当前正在活跃的媒体音乐信息
      */
     @SuppressLint("UseCompatLoadingForDrawables", "SetTextI18n")
     private fun updateCurrentMusicCardView() {
@@ -420,16 +432,11 @@ class MusicCardView @JvmOverloads constructor(
                     )
                     clipToOutline = true
                 }
-                mNameAndSingerView.text =
-                    it.title + "-" + it.artist
-                // TODO 设置跑马灯
-                mNameAndSingerView.getViewParentWidth { parentWidth, parentHeight ->
-                    Logger.d("parentWidth: $parentWidth")
+                mNameAndSingerView.apply {
+                    // TODO 歌名与歌手文本颜色分开
+                    text = it.title + "-" + it.artist
+                    setMarquee()
                 }
-                //mNameAndSingerView.isFocusable = true
-                //mNameAndSingerView.marqueeRepeatLimit = -1
-                //mNameAndSingerView.isFocusableInTouchMode = true
-                //mNameAndSingerView.requestFocus()
 
                 // 此处先设置最大值，再设置当前值，防止进度被重置
                 mProgressBarView.max = it.duration.toInt()
@@ -509,9 +516,33 @@ class MusicCardView @JvmOverloads constructor(
     }
 
     /**
-     * TODO 设置缩放样式
+     * 根据状态切换mini、中、大型样式，暂时只支持mini、中切换
      */
-    private fun setScaleView() {
+    fun toggleLayoutStyle() {
+        Logger.d("cardState: $cardState")
+        when (cardState) {
+            CardComponentState.MINI -> {
+                mZoomView.setBackgroundResource(R.drawable.img_enlarge)
+                setMiniDimens()
+            }
+
+            CardComponentState.MEDIUM -> {
+                mZoomView.setBackgroundResource(R.drawable.img_reduce)
+                setMediumDimens()
+            }
+
+            CardComponentState.Large -> {
+
+            }
+        }
+    }
+
+    fun setMiniDimens() {
+
+    }
+
+    fun setMediumDimens() {
+        val rootLayout = mView.findLinearLayoutById(R.id.music_card_root)
 
     }
 
