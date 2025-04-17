@@ -62,41 +62,10 @@ class MusicCardView @JvmOverloads constructor(
     private val mPauseView by lazy { binding.musicPause }
     private val mNextView by lazy { binding.musicNext }
 
-    /*private val checkActiveMediaRunnable = object : Runnable {
-        override fun run() {
-            try {
-                val componentName =
-                    ComponentName(context, LauncherNotificationListenerService::class.java)
-                val activeSession = mediaSessionManager?.getActiveSessions(componentName)
-                activeSession?.let { controllers ->
-                    var firstPlayingController: MediaController? = null
-
-                    controllers.forEach { controller ->
-                        val state = controller.getState()
-                        if (state == PlaybackState.STATE_PLAYING) {
-                            firstPlayingController = controller
-                            return@forEach
-                        }
-                    }
-                    if (firstPlayingController != null && currentController?.packageName != firstPlayingController?.packageName) {
-                        currentController = firstPlayingController
-                        updateCurrentMusicCardView()
-                        updatePlayOrPauseButton(
-                            currentController?.getState() ?: PlaybackState.STATE_NONE
-                        )
-                    }
-                }
-                handler.postDelayed(this, 3000)
-            } catch (e: Exception) {
-                Logger.e("Error checking active media: ${e.message}")
-            }
-        }
-    }*/
-
     private var cardState: CardComponentState = CardComponentState.MINI
 
     init {
-        addView(binding.root)
+        addView(rootView)
         // 判断权限再展示
         if (PermissionUtil.isNotificationServiceEnabled(
                 context.contentResolver,
@@ -121,7 +90,6 @@ class MusicCardView @JvmOverloads constructor(
                 }
             }
 
-            binding.lifecycleOwner = activity
             observeViewModel()
         }
     }
