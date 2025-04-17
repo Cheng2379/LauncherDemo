@@ -10,9 +10,9 @@ import android.media.session.PlaybackState
  */
 data class MediaInfoBean(
     // 歌名
-    val title: String = "暂无播放",
+    val title: String,
     // 艺术家、歌手
-    val artist: String = "",
+    val artist: String,
     // 播放状态:    1 -> 终止    2 -> 暂停    3 -> 播放
     val playerStatus: Int = PLAYER_STATE_PAUSED,
     val albumBitmap: Bitmap?,

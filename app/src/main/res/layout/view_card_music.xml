@@ -2,9 +2,13 @@
 <layout>
     
     <data>
+        
+        <import type="android.text.TextUtils" />
+        
         <variable
             name="mediaAppInfo"
             type="com.example.launcherdemo.bean.MediaAppBean" />
+        
         <variable
             name="mediaInfo"
             type="com.example.launcherdemo.bean.MediaInfoBean" />
@@ -44,7 +48,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginStart="16dp"
                 android:layout_toEndOf="@id/music_logo"
-                android:text="@{mediaAppInfo.appName}"
+                android:text="@{mediaAppInfo.appName ?? `媒体中心`}"
                 android:textColor="@color/black"
                 android:textSize="20sp"
                 android:textStyle="bold"
@@ -74,9 +78,9 @@
                 android:id="@+id/music_album"
                 android:layout_width="72dp"
                 android:layout_height="72dp"
-                app:imageBitmap="@{mediaInfo.albumBitmap}"
                 android:background="@drawable/shape_media_card_radius"
-                android:src="@drawable/img_album" />
+                android:src="@drawable/img_album"
+                app:imageBitmap="@{mediaInfo.albumBitmap}" />
             
             <LinearLayout
                 android:layout_width="match_parent"
@@ -92,7 +96,7 @@
                     android:ellipsize="marquee"
                     android:gravity="center"
                     android:maxLines="1"
-                    android:text="@{mediaInfo.title + '-' + mediaInfo.artist}"
+                    android:text="@{TextUtils.isEmpty(mediaInfo.title) || TextUtils.isEmpty(mediaInfo.artist) ? `暂无播放` : mediaInfo.title + `-` + mediaInfo.artist}"
                     android:textColor="@color/black"
                     android:textSize="22sp"
                     android:textStyle="bold" />

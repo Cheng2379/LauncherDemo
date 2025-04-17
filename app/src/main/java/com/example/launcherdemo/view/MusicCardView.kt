@@ -53,6 +53,7 @@ class MusicCardView @JvmOverloads constructor(
     }
     private val rootView = binding.root
     private val mMusicLogo by lazy { binding.musicLogo }
+    private val mMusicTitle by lazy { binding.musicTitle }
     private val mZoomView by lazy { binding.musicCardZoom }
     private val mAlbumView by lazy { binding.musicAlbum }
     private val mNameAndSingerView by lazy { binding.musicNameAndSinger }
@@ -80,7 +81,6 @@ class MusicCardView @JvmOverloads constructor(
     fun initViewModel() {
         (context as? FragmentActivity)?.let { activity ->
             musicViewModel = ViewModelProvider(activity)[MusicCardViewModel::class.java]
-            setupDefaultState()
             // 确保有权限后再初始化
             if (PermissionUtil.isNotificationServiceEnabled(context.contentResolver, context.packageName)) {
                 musicViewModel.initMediaSession(context)
@@ -150,12 +150,6 @@ class MusicCardView @JvmOverloads constructor(
             }
             toggleLayoutStyle()
         }
-    }
-
-    private fun setupDefaultState() {
-        binding.musicNameAndSinger.text = "暂无媒体信息"
-        mMusicLogo.setImageResource(R.drawable.img_logo)
-        mAlbumView.setImageResource(R.drawable.img_album)
     }
 
     fun observeViewModel() {
