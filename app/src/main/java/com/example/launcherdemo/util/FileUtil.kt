@@ -64,7 +64,7 @@ object FileUtil {
 
     fun isMusicFile(fileName: String): Boolean {
         // 转换为小写
-        val lowerCaseName = fileName.toLowerCase(Locale.ROOT)
+        val lowerCaseName = fileName.lowercase(Locale.ROOT)
         return lowerCaseName.endsWith(".mp3") ||
                 lowerCaseName.endsWith(".wav") ||
                 lowerCaseName.endsWith(".flac") ||

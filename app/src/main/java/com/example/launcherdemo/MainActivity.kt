@@ -5,42 +5,49 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
-import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.view.View
-import android.widget.ImageView
 import android.widget.PopupMenu
-import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.RecyclerView
 import com.example.launcherdemo.adapter.RecyclerViewAdapter
 import com.example.launcherdemo.bean.AppInfoBean
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import androidx.core.net.toUri
+import androidx.databinding.DataBindingUtil
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
+import com.example.launcherdemo.databinding.ActivityMainBinding
+import com.example.launcherdemo.util.AppRepository
 import com.example.launcherdemo.util.Logger
 import com.example.launcherdemo.util.PermissionUtil
 import com.example.launcherdemo.util.launchApp
+import com.example.launcherdemo.util.showToast
 import com.example.launcherdemo.view.MusicCardView
+import com.example.launcherdemo.vm.MainViewModel
+import com.example.launcherdemo.vm.MusicCardViewModel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 
 class MainActivity : AppCompatActivity() {
-    private val mRv: RecyclerView by lazy { findViewById(R.id.rv_main) }
-    private var mRvAdapter: RecyclerViewAdapter<AppInfoBean>? = null
-    private val mMusicCardView: MusicCardView by lazy { findViewById(R.id.music_card_view) }
+    private lateinit var mainBinding: ActivityMainBinding
+    private val mainViewModel: MainViewModel by viewModels()
+    private val musicViewModel: MusicCardViewModel by viewModels()
 
-    private var appInfoBeanList = ArrayList<AppInfoBean>()
+    private val mRv: RecyclerView by lazy { mainBinding.rvMain }
+    private var mRvAdapter: RecyclerViewAdapter<AppInfoBean>? = null
+    private val mMusicCardView: MusicCardView by lazy { mainBinding.musicCardView }
+
     private var pendingUninstallPackage: String? = null
     private var pendingUninstallAppName: String? = null
     private var uninstallResultReceiver: BroadcastReceiver? = null
@@ -49,55 +56,63 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        setContentView(R.layout.activity_main)
+        mainBinding = DataBindingUtil.setContentView(this, R.layout.activity_main)
+        mainBinding.lifecycleOwner = this
+
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main)) { v, insets ->
             val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
             v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom)
             insets
         }
+        setupPermissionLauncher()
 
         initView()
-        loadApplicationInfoList()
-        setUninstallResultReceiver()
+        setupObservers()
+        setupUninstallLogic()
     }
 
     private fun initView() {
         mRvAdapter = RecyclerViewAdapter(
             this,
-            appInfoBeanList,
+            ArrayList(),
             R.layout.item_app
         ) { viewHolder, position ->
-            val appInfo = appInfoBeanList[position]
+            mRvAdapter?.dataList?.getOrNull(position)?.let { appInfo ->
+                val view = viewHolder.itemView
 
-            val view = viewHolder.itemView
-            val iconView = view.findViewById<ImageView>(R.id.app_icon)
-            val appNameView = view.findViewById<TextView>(R.id.app_name)
-
-            iconView.apply {
-                background =
-                    ContextCompat.getDrawable(context, R.drawable.shape_img_selector)
-                clipToOutline = true
-                setImageDrawable(appInfo.icon)
-            }
-            appNameView.text = appInfo.appName
-
-            view.setOnClickListener {
-                launchApp(this, appInfo.packageName)
-            }
-            view.setOnLongClickListener {
-                showAppOptions(view, appInfo)
-                true
+                view.setOnClickListener {
+                    launchApp(this, appInfo.packageName)
+                }
+                view.setOnLongClickListener {
+                    showAppOptions(view, appInfo)
+                    true
+                }
             }
         }
         mRv.adapter = mRvAdapter
+    }
 
+    private fun setupObservers() {
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                mainViewModel.apps.collectLatest { apps ->
+                    mRvAdapter?.updateAll(ArrayList(apps))
+                }
+            }
+        }
+    }
+
+    /**
+     * 卸载应用
+     */
+    private fun setupUninstallLogic() {
         // 卸载回调监听
         uninstallLauncher =
             registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
                 pendingUninstallPackage?.let { target ->
                     lifecycleScope.launch {
                         delay(100)
-                        if (isAppInstalled(target)) {
+                        if (AppRepository.isAppInstalled(this@MainActivity, target)) {
                             Toast.makeText(this@MainActivity, "已取消卸载", Toast.LENGTH_SHORT)
                                 .show()
                         }
@@ -106,20 +121,27 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
             }
-
-        setPermission()
+        setUninstallResultReceiver()
     }
 
     /**
      * 设置权限
      */
-    private fun setPermission() {
-        PermissionUtil.requestPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE, 0)
-        mMusicCardView.setOnClickListener {
-            // 点击时判断并请求权限
-            requestNotificationPermission()
-            PermissionUtil.requestPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE, 0)
-        }
+    private fun setupPermissionLauncher() {
+        PermissionUtil.registerMultiplePermissionsLauncher(this) { permissions ->
+            if (permissions[Manifest.permission.READ_EXTERNAL_STORAGE] == false) {
+                mMusicCardView.setOnClickListener {
+                    // 点击时判断并请求权限
+                    requestNotificationPermission()
+                }
+            }
+        }.launch(
+            // 运行时权限列表
+            arrayOf(
+                Manifest.permission.READ_EXTERNAL_STORAGE,
+                Manifest.permission.WRITE_EXTERNAL_STORAGE
+            )
+        )
     }
 
     /**
@@ -127,27 +149,9 @@ class MainActivity : AppCompatActivity() {
      */
     private fun requestNotificationPermission() {
         if (PermissionUtil.isNotificationServiceEnabled(contentResolver, packageName)) {
-            mMusicCardView.initView()
+            mMusicCardView.initViewModel()
         } else {
             PermissionUtil.requestNotificationPermission(this)
-        }
-    }
-
-    override fun onRequestPermissionsResult(
-        requestCode: Int,
-        permissions: Array<out String>,
-        grantResults: IntArray,
-        deviceId: Int
-    ) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults, deviceId)
-        when(requestCode) {
-            0 -> {
-                if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                    Toast.makeText(this, "权限已授予", Toast.LENGTH_SHORT).show()
-                }else {
-                    Toast.makeText(this, "权限被拒绝", Toast.LENGTH_SHORT).show()
-                }
-            }
         }
     }
 
@@ -189,51 +193,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private suspend fun getAppInfoList(): List<AppInfoBean> = withContext(Dispatchers.IO) {
-        return@withContext mutableListOf<AppInfoBean>().apply {
-            val mainIntent = Intent(Intent.ACTION_MAIN).apply {
-                addCategory(Intent.CATEGORY_LAUNCHER)
-            }
-            packageManager.queryIntentActivities(mainIntent, PackageManager.GET_META_DATA)
-                .mapNotNull { resolveInfo ->
-                    resolveInfo.activityInfo?.packageName
-                        .takeIf {
-                            !it.equals("com.example.launcherdemo")
-                        }
-                        ?.let {
-                            add(
-                                AppInfoBean(
-                                    resolveInfo.activityInfo.packageName,
-                                    resolveInfo.activityInfo.name,
-                                    resolveInfo.loadLabel(packageManager).toString(),
-                                    resolveInfo.loadIcon(packageManager)
-                                )
-                            )
-                        }
-                }
-        }
-    }
-
-    private fun loadApplicationInfoList() {
-        lifecycleScope.launch(Dispatchers.IO) {
-            appInfoBeanList = getAppInfoList() as ArrayList<AppInfoBean>
-            appInfoBeanList.sortWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.appName })
-            withContext(Dispatchers.Main) {
-                mRvAdapter?.updateAll(appInfoBeanList)
-            }
-        }
-    }
-
-    private fun isAppInstalled(packageName: String): Boolean {
-        return try {
-            packageManager.getPackageInfo(packageName, 0)
-            true
-        } catch (e: PackageManager.NameNotFoundException) {
-            false
-        }
-
-    }
-
     /**
      * 监听卸载回调广播
      */
@@ -249,15 +208,11 @@ class MainActivity : AppCompatActivity() {
                         if (!isUninstalled) {
                             runOnUiThread {
                                 if (!isFinishing && !isDestroyed) {
-                                    Toast.makeText(
-                                        context,
-                                        "${appName}卸载完成",
-                                        Toast.LENGTH_SHORT
-                                    ).show()
+                                    "${appName}卸载完成".showToast()
                                 }
                             }
                             // 刷新应用列表
-                            loadApplicationInfoList()
+                            mainViewModel.loadApplicationInfoList()
                             pendingUninstallPackage = null
                             pendingUninstallAppName = null
                         }
@@ -274,7 +229,6 @@ class MainActivity : AppCompatActivity() {
     override fun onDestroy() {
         unregisterReceiver(uninstallResultReceiver)
         super.onDestroy()
-
     }
 
 }

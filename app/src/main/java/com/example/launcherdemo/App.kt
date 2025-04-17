@@ -15,6 +15,8 @@ class App : Application() {
     companion object {
         @SuppressLint("StaticFieldLeak")
         lateinit var mContext: Context
+
+        fun getGlobalContext() = mContext
     }
 
     override fun onCreate() {

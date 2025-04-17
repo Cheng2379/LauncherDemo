@@ -2,6 +2,7 @@ package com.example.launcherdemo.util
 
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.graphics.Paint
 import android.media.MediaMetadata
 import android.media.session.MediaController
@@ -20,8 +21,10 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.core.graphics.drawable.toBitmap
+import androidx.media.MediaBrowserServiceCompat
 import androidx.recyclerview.widget.RecyclerView
 import com.example.launcherdemo.App
+import com.example.launcherdemo.bean.AppInfoBean
 import com.example.launcherdemo.bean.MediaAppBean
 import com.example.launcherdemo.bean.MediaInfoBean
 
@@ -33,11 +36,11 @@ import com.example.launcherdemo.bean.MediaInfoBean
  */
 
 fun String.showToast(duration: Int = Toast.LENGTH_SHORT) {
-    Toast.makeText(App.mContext, this, duration).show()
+    Toast.makeText(App.getGlobalContext(), this, duration).show()
 }
 
 fun Int.showToast(duration: Int = Toast.LENGTH_SHORT) {
-    Toast.makeText(App.mContext, this, duration).show()
+    Toast.makeText(App.getGlobalContext(), this, duration).show()
 }
 
 fun CharSequence.toHtml(): Spanned {
@@ -113,13 +116,42 @@ fun launchApp(context: Context, packageName: String) {
 }
 
 /**
+ * 获取系统内所有的媒体应用列表信息
+ */
+fun getAllMediaApp(context: Context): List<AppInfoBean> {
+    val allMediaAppInfoList = mutableListOf<AppInfoBean>()
+    val intent = Intent(MediaBrowserServiceCompat.SERVICE_INTERFACE)
+    val services =
+        context.packageManager.queryIntentServices(intent, PackageManager.GET_RESOLVED_FILTER)
+    services.takeIf {
+        it.isNotEmpty()
+    }?.let { list ->
+        list.forEach { resolveInfo ->
+            resolveInfo.serviceInfo?.let { service ->
+                allMediaAppInfoList.add(
+                    AppInfoBean(
+                        service.packageName,
+                        service.name,
+                        resolveInfo.loadLabel(context.packageManager).toString(),
+                        resolveInfo.loadIcon(context.packageManager)
+                    )
+                )
+            }
+        }
+        return allMediaAppInfoList
+    } ?: run {
+        return emptyList()
+    }
+}
+
+/**
  * 获取媒体应用信息
  */
 fun MediaController.getMediaAppBean(): MediaAppBean? {
     return this.packageName?.let { packageName ->
         Logger.d("packageName: $packageName")
         // 获取媒体应用信息
-        val packageManager = App.mContext.packageManager
+        val packageManager = App.getGlobalContext().packageManager
         val applicationInfo = packageManager.getApplicationInfo(packageName, 0)
         val appName = packageManager.getApplicationLabel(applicationInfo).toString()
         val appIcon = packageManager.getApplicationIcon(applicationInfo).toBitmap()

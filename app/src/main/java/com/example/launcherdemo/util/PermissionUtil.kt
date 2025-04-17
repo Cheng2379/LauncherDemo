@@ -6,6 +6,9 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.provider.Settings
+import androidx.activity.ComponentActivity
+import androidx.activity.result.ActivityResultLauncher
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 
 /**
@@ -16,7 +19,7 @@ import androidx.core.content.ContextCompat
 object PermissionUtil {
 
     /**
-     * 检查权限是否被授予
+     * 检查权限是否被授予, 常规方式, 旧版API
      */
     fun checkPermission(context: Context, permission: String): Boolean {
         return ContextCompat.checkSelfPermission(
@@ -26,7 +29,7 @@ object PermissionUtil {
     }
 
     /**
-     * 请求权限
+     * 请求权限, 常规方式， 旧版API
      */
     fun requestPermission(activity: Activity, permission: String, code: Int) {
         if (!checkPermission(activity, permission)) {
@@ -35,6 +38,19 @@ object PermissionUtil {
                 code
             )
         }
+    }
+
+    /**
+     * 新版API
+     */
+    fun registerMultiplePermissionsLauncher(
+        activity: ComponentActivity,
+        onResult: (Map<String, Boolean>) -> Unit
+    ): ActivityResultLauncher<Array<String>> {
+        return activity.registerForActivityResult(
+            ActivityResultContracts.RequestMultiplePermissions(),
+            onResult
+        )
     }
 
     /**

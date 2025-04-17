@@ -9,7 +9,7 @@ import android.media.session.MediaController
  * @since 2025/4/8
  */
 data class MediaAppBean(
-    val appName: String,
+    val appName: String = "媒体中心",
     val packageName: String,
     val logoImg: Bitmap?,
     val mediaInfoBean: MediaInfoBean?,
