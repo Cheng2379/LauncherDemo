@@ -1,6 +1,7 @@
 package com.example.launcherdemo
 
 import android.Manifest
+import android.app.WallpaperManager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -9,6 +10,7 @@ import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.view.View
+import android.view.WindowManager
 import android.widget.PopupMenu
 import android.widget.Toast
 import androidx.activity.enableEdgeToEdge
@@ -31,6 +33,7 @@ import com.example.launcherdemo.databinding.ActivityMainBinding
 import com.example.launcherdemo.util.AppRepository
 import com.example.launcherdemo.util.Logger
 import com.example.launcherdemo.util.PermissionUtil
+import com.example.launcherdemo.util.WallpaperUtil
 import com.example.launcherdemo.util.launchApp
 import com.example.launcherdemo.util.showToast
 import com.example.launcherdemo.view.MusicCardView
@@ -72,6 +75,11 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun initView() {
+        // 设置背景为系统壁纸
+        mainBinding.main.background = WallpaperUtil.getWallpaperDrawable()
+
+        //WallpaperUtil.setWallpaper(R.drawable.bg_2)
+
         mRvAdapter = RecyclerViewAdapter(
             this,
             ArrayList(),

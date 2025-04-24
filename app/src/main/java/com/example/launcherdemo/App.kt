@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.app.Application
 import android.content.Context
 import com.example.launcherdemo.util.Logger
+import com.example.launcherdemo.util.WallpaperUtil
 
 /**
  *
@@ -24,5 +25,7 @@ class App : Application() {
         mContext = applicationContext
         Logger.init(Logger.DEBUG)
         Logger.setLogDeep(1)
+
+        WallpaperUtil.initWallpaperManager(mContext)
     }
 }
